@@ -1,0 +1,26 @@
+# Dependências
+node_modules/
+
+# Builds e transpilações
+dist/
+build/
+
+# Logs
+*.log
+
+# Arquivos sensíveis
+.env
+.env.local
+.env.development
+.env.production
+
+# Configurações do editor/IDE
+.vscode/
+.idea/
+
+# Testes
+coverage/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
