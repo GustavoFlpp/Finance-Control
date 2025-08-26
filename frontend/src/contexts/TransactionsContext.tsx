@@ -1,17 +1,29 @@
-// frontend/src/hooks/useTransactions.ts
-import { useState, useEffect, useCallback } from "react";
-import type { Transaction } from "../api/transactions";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import { Transaction } from "../api/transactions";
 
-interface UseTransactionsReturn {
+interface TransactionsContextType {
   transactions: Transaction[];
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
-  update: (id: string, data: Partial<Transaction>) => Promise<void>;
-  remove: (id: string) => Promise<void>;
+  updateTransaction: (id: string, data: Partial<Transaction>) => Promise<void>;
+  removeTransaction: (id: string) => Promise<void>;
 }
 
-export function useTransactions(token: string): UseTransactionsReturn {
+const TransactionsContext = createContext<TransactionsContextType | undefined>(
+  undefined
+);
+
+export const TransactionsProvider: React.FC<{ token: string }> = ({
+  token,
+  children,
+}) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +40,7 @@ export function useTransactions(token: string): UseTransactionsReturn {
     }
   }, []);
 
-  const fetchTransactions = useCallback(async () => {
+  const reload = useCallback(async () => {
     if (!token) return;
     await handleRequest(async () => {
       const res = await fetch("http://localhost:3000/api/transactions", {
@@ -40,8 +52,8 @@ export function useTransactions(token: string): UseTransactionsReturn {
     });
   }, [token, handleRequest]);
 
-  const update = useCallback(
-    async (id: string, updateData: Partial<Transaction>) => {
+  const updateTransaction = useCallback(
+    async (id: string, data: Partial<Transaction>) => {
       if (!token) return;
       await handleRequest(async () => {
         const res = await fetch(
@@ -52,7 +64,7 @@ export function useTransactions(token: string): UseTransactionsReturn {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify(updateData),
+            body: JSON.stringify(data),
           }
         );
         if (!res.ok) throw new Error("Failed to update transaction");
@@ -65,7 +77,7 @@ export function useTransactions(token: string): UseTransactionsReturn {
     [token, handleRequest]
   );
 
-  const remove = useCallback(
+  const removeTransaction = useCallback(
     async (id: string) => {
       if (!token) return;
       await handleRequest(async () => {
@@ -84,15 +96,30 @@ export function useTransactions(token: string): UseTransactionsReturn {
   );
 
   useEffect(() => {
-    if (token) fetchTransactions();
-  }, [token, fetchTransactions]);
+    reload();
+  }, [reload]);
 
-  return {
-    transactions,
-    loading,
-    error,
-    reload: fetchTransactions,
-    update,
-    remove,
-  };
-}
+  return (
+    <TransactionsContext.Provider
+      value={{
+        transactions,
+        loading,
+        error,
+        reload,
+        updateTransaction,
+        removeTransaction,
+      }}
+    >
+      {children}
+    </TransactionsContext.Provider>
+  );
+};
+
+export const useTransactionsContext = () => {
+  const context = useContext(TransactionsContext);
+  if (!context)
+    throw new Error(
+      "useTransactionsContext must be used within TransactionsProvider"
+    );
+  return context;
+};

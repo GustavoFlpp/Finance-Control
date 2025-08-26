@@ -6,6 +6,31 @@ import { Transaction } from "../models/Transaction";
 
 const router = express.Router();
 
+// POST /api/transactions -> cria uma nova transação
+router.post("/", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.userId;
+    const { name, value, category, date } = req.body;
+
+    if (!name || value === undefined)
+      return res.status(400).json({ error: "Name and value are required" });
+
+    const transaction = new Transaction({
+      userId,
+      name,
+      value,
+      category: category || "Outros",
+      date: date ? new Date(date) : new Date(),
+    });
+
+    await transaction.save();
+    return res.status(201).json(transaction);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Failed to create transaction" });
+  }
+});
+
 // GET /api/transactions  -> retorna apenas do user
 router.get("/", authMiddleware, async (req: AuthRequest, res) => {
   try {

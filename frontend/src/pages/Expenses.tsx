@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import CloseIcon from "@mui/icons-material/Close";
+import Papa from "papaparse";
 
 import TransactionList from "../components/TransactionList";
 import EditTransactionDialog from "../components/EditTransactionDialog";
@@ -20,7 +21,6 @@ import { useTransactions } from "../hooks/useTransactions";
 
 export default function Expenses() {
   const token = localStorage.getItem("token"); // pegando o token
-
   const { transactions, loading, error, reload, update, remove } =
     useTransactions(token || "");
 
@@ -30,7 +30,7 @@ export default function Expenses() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [editOpen, setEditOpen] = useState(false);
-  const [editTx, setEditTx] = useState(null);
+  const [editTx, setEditTx] = useState<any>(null);
 
   function clearFile() {
     setFile(null);
@@ -41,57 +41,58 @@ export default function Expenses() {
   async function uploadFile() {
     if (!file) return alert("Por favor, selecione um arquivo");
 
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const token = localStorage.getItem("token");
-
     setUploading(true);
     setUploadProgress(0);
 
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "http://localhost:3000/api/upload");
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      step: async (row, parser) => {
+        const data = row.data as any;
 
-      // Envia token no header Authorization
-      if (token) {
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      }
+        // pegando os campos possíveis
+        const name = data.name || data.Nome || data.description;
+        const valueRaw = data.value || data.Valor || data.amount;
+        const category = data.category || data.Categoria || "Outros";
+        const dateRaw = data.date || data.Data;
 
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const percent = (event.loaded / event.total) * 100;
-          setUploadProgress(percent);
+        if (!name || !valueRaw) {
+          console.warn("Linha inválida ignorada:", data);
+          return;
         }
-      };
 
-      xhr.onload = () => {
-        if (xhr.status === 200) {
-          resolve();
-        } else {
-          reject(new Error("Upload failed"));
+        const value = parseFloat(String(valueRaw).replace(",", "."));
+        if (isNaN(value)) {
+          console.warn("Valor inválido, linha ignorada:", data);
+          return;
         }
-      };
 
-      xhr.onerror = () => reject(new Error("Upload failed"));
+        const date = dateRaw ? new Date(dateRaw) : new Date();
 
-      xhr.send(formData);
-    })
-      .then(() => {
-        reload();
-        alert("Arquivo enviado com sucesso!");
-        clearFile();
-      })
-      .catch(() => {
-        alert("Falha no envio do arquivo");
-      })
-      .finally(() => {
+        try {
+          await fetch("http://localhost:3000/api/transactions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ name, value, category, date }),
+          });
+        } catch (err) {
+          console.error("Erro ao enviar transação:", err);
+        }
+      },
+      complete: async () => {
         setUploading(false);
-        setUploadProgress(0);
-      });
+        setUploadProgress(100);
+        clearFile();
+        await reload();
+        alert("Upload finalizado!");
+      },
+    });
   }
 
-  function handleEdit(tx) {
+  function handleEdit(tx: any) {
     setEditTx(tx);
     setEditOpen(true);
   }
@@ -101,7 +102,7 @@ export default function Expenses() {
     setEditTx(null);
   }
 
-  async function handleSaveEdit(data) {
+  async function handleSaveEdit(data: any) {
     if (!editTx) return;
     await update(editTx._id, data);
     handleCloseEdit();
@@ -123,14 +124,16 @@ export default function Expenses() {
         />
 
         <Tooltip title="Escolher arquivo CSV">
-          <Button
-            variant="outlined"
-            onClick={() => fileInputRef.current?.click()}
-            sx={{ minWidth: 0, padding: "6px 8px" }}
-            disabled={uploading || loading}
-          >
-            <UploadFileIcon />
-          </Button>
+          <span>
+            <Button
+              variant="outlined"
+              onClick={() => fileInputRef.current?.click()}
+              sx={{ minWidth: 0, padding: "6px 8px" }}
+              disabled={uploading || loading}
+            >
+              <UploadFileIcon />
+            </Button>
+          </span>
         </Tooltip>
 
         {file && (

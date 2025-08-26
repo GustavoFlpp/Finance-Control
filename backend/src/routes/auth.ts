@@ -1,4 +1,4 @@
-//backend/src/routes/auth.ts
+// backend/src/routes/auth.ts
 
 import express from "express";
 import bcrypt from "bcrypt";
@@ -34,12 +34,23 @@ router.post("/register", async (req, res) => {
     const newUser = new User({
       name,
       email,
-      passwordHash: hashedPassword, // Usando passwordHash sempre
+      passwordHash: hashedPassword,
     });
 
     await newUser.save();
 
-    res.status(201).json({ message: "Usuário registrado com sucesso" });
+    // Gerar token JWT após registro
+    const token = jwt.sign(
+      {
+        userId: newUser._id.toString(),
+        email: newUser.email,
+        name: newUser.name,
+      },
+      JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.status(201).json({ token });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Erro ao registrar usuário" });
@@ -71,19 +82,18 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Senha inválida" });
     }
 
-    // Aqui geramos o token com o payload correto
     const token = jwt.sign(
       {
         userId: user._id.toString(),
         email: user.email,
         name: user.name,
       },
-      process.env.JWT_SECRET!,
+      JWT_SECRET,
       { expiresIn: "1d" }
     );
 
     res.json({ token });
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
     res.status(500).json({ error: "Failed to login", details: error.message });
   }
